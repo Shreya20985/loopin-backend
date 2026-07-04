@@ -2,6 +2,8 @@ import { db } from "../connect.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
+const isProd = process.env.NODE_ENV === "production";
+
 export const register = (req, res) => {
   // CHECK USER IF EXISTS
   const q = "SELECT * FROM users WHERE username=?";
@@ -11,18 +13,17 @@ export const register = (req, res) => {
 
     // Hash the password
     const salt = bcrypt.genSaltSync(10);
-    const hashedPassword = bcrypt.hashSync(req.body.password, salt); // fixed
+    const hashedPassword = bcrypt.hashSync(req.body.password, salt);
 
     const q2 = "INSERT INTO users (`username`,`email`,`password`,`name`,`profilePic`,`coverPic`) VALUE (?)";
     const values = [
-  req.body.username,
-  req.body.email,
-  hashedPassword,
-  req.body.name,
-  "default-avatar.png",
-  "default-cover.png"
-];
-    
+      req.body.username,
+      req.body.email,
+      hashedPassword,
+      req.body.name,
+      "default-avatar.png",
+      "default-cover.png"
+    ];
 
     db.query(q2, [values], (err, data) => {
       if (err) return res.status(500).json(err);
@@ -43,13 +44,15 @@ export const login = (req, res) => {
     if (!checkPassword)
       return res.status(400).json("Wrong password or username!");
 
-    const token = jwt.sign({ id: data[0].id }, "secretkey");
+    const token = jwt.sign({ id: data[0].id }, process.env.JWT_SECRET || "secretkey");
 
     const { password, ...others } = data[0];
 
     res
       .cookie("accessToken", token, {
         httpOnly: true,
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
       })
       .status(200)
       .json(others);
@@ -57,5 +60,12 @@ export const login = (req, res) => {
 };
 
 export const logout = (req, res) => {
-  res.clearCookie("accessToken", { httpOnly: true }).status(200).json("User has been logged out.");
+  res
+    .clearCookie("accessToken", {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+    })
+    .status(200)
+    .json("User has been logged out.");
 };
